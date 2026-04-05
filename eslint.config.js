@@ -1,5 +1,6 @@
 import js from '@eslint/js'
 import sveltePlugin from 'eslint-plugin-svelte'
+import globals from 'globals'
 
 export default [
   js.configs.recommended,
@@ -7,6 +8,12 @@ export default [
   {
     rules: {
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    files: ['cli/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
   {
