@@ -46,6 +46,15 @@ fdb --db firearms.db <command>
 
 ---
 
+### Init
+
+Create a new empty database:
+
+```sh
+fdb --db firearms.db init          # fails if file already exists
+fdb --db firearms.db init --force  # overwrite existing file
+```
+
 ### Firearms
 
 ```sh
