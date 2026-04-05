@@ -567,8 +567,4 @@ Before handing off to Phase 2, verify:
 
 - [ ] `npm run test:run` passes all tests with no failures
 - [ ] `npm run lint` exits 0
-- [ ] Manual: create a `.db` file with `fdb`, open it with an external SQLite tool — schema and data are correct
-- [ ] Manual: `schema_version` is `'1'` in the `meta` table
-- [ ] Manual: delete a firearm with linked data — all linked rows are gone
-- [ ] Manual: `fdb ... --json | jq` works (valid JSON output)
-- [ ] Manual: `~/.fdbrc` config file is respected
+- [ ] Manual: open a generated `.db` file with an external SQLite tool (e.g. `sqlite3` or DB Browser) — confirms sqlite-wasm serialization is compatible with standard SQLite (the export/import round-trip test validates data integrity; this checks wire-format compatibility)
