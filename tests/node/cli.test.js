@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { spawnSync } from 'child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir, homedir } from 'os'
 
@@ -44,6 +44,40 @@ function runJson(args, opts = {}) {
   const result = run(args, opts)
   return { ...result, data: JSON.parse(result.stdout) }
 }
+
+// ── init ───────────────────────────────────────────────────────────────────────
+
+describe('init', () => {
+  it('creates a new database file at --db path', () => {
+    const r = run(`--db ${dbPath} init`)
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain('Database created')
+    expect(existsSync(dbPath)).toBe(true)
+  })
+
+  it('the created database accepts firearms list (schema is valid)', () => {
+    run(`--db ${dbPath} init`)
+    const r = run(`--db ${dbPath} firearms list`)
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain('No firearms yet.')
+  })
+
+  it('exits 1 if file already exists without --force', () => {
+    run(`--db ${dbPath} init`)
+    const r = run(`--db ${dbPath} init`)
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain('already exists')
+  })
+
+  it('--force overwrites an existing file', () => {
+    run(`--db ${dbPath} init`)
+    run(`--db ${dbPath} firearms add --name "Gun" --serial "S001"`)
+    const r = run(`--db ${dbPath} init --force`)
+    expect(r.code).toBe(0)
+    const result = runJson(`--db ${dbPath} firearms list --json`)
+    expect(result.data).toEqual([])
+  })
+})
 
 // ── firearms ───────────────────────────────────────────────────────────────────
 

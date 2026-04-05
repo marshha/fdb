@@ -161,6 +161,29 @@ function getDbPath(opts) {
   return dbPath
 }
 
+// ── init ───────────────────────────────────────────────────────────────────────
+
+program
+  .command('init')
+  .description('Create a new empty database at the --db path')
+  .option('--force', 'Overwrite if the file already exists')
+  .action(async (opts) => {
+    const dbPath = getDbPath(program.opts())
+    if (existsSync(dbPath) && !opts.force) {
+      process.stderr.write(`Database already exists: ${dbPath}\nUse --force to overwrite.\n`)
+      process.exit(1)
+    }
+    try {
+      await initSqlite()
+      const db = await createDatabase()
+      saveDb(db, dbPath)
+      process.stdout.write(`Database created: ${dbPath}\n`)
+    } catch (e) {
+      process.stderr.write(e.message + '\n')
+      process.exit(1)
+    }
+  })
+
 // ── firearms ───────────────────────────────────────────────────────────────────
 
 const firearms = program.command('firearms')
