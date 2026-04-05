@@ -1,4 +1,9 @@
-# Firearm Tracker -- Implementation Plan
+# Firearm Tracker -- Master Design Document
+
+> This is the architectural reference. Implementation is split across three phase plans:
+> - [Phase 1 — Schema + CLI](phase1-cli-plan.md)
+> - [Phase 2 — Web Application](phase2-web-plan.md)
+> - [Phase 3 — E2E Testing](phase3-e2e-plan.md)
 
 ## Goals
 
@@ -47,7 +52,7 @@ However, the File System Access API (`showOpenFilePicker` / `showSaveFilePicker`
 
 ## Database schema
 
-All timestamps are stored as `TEXT` in ISO 8601 UTC format (e.g. `2026-04-04T19:59:00.000000+00:00`).
+**Date storage:** All date/time values are stored as UTC epoch milliseconds (`INTEGER`). The UI converts these to the user's local timezone for display, formatted using `toLocaleDateString()` / `toLocaleString()` with the browser's locale. Date pickers collect a local date/time and convert to UTC epoch before writing. This avoids timezone-shift bugs where a calendar date (e.g. "April 4th") silently becomes the prior day in UTC.
 
 ```sql
 CREATE TABLE firearms (
@@ -57,7 +62,7 @@ CREATE TABLE firearms (
     manufacturer    TEXT,
     caliber         TEXT,
     purchase_price  REAL,
-    purchase_date   TEXT,
+    purchase_date   INTEGER,
     ffl_dealer      TEXT,
     notes           TEXT
 );
@@ -65,7 +70,7 @@ CREATE TABLE firearms (
 CREATE TABLE round_counts (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     firearm_id      INTEGER NOT NULL,
-    date            TEXT NOT NULL,
+    date            INTEGER NOT NULL,
     rounds_fired    INTEGER NOT NULL,
     notes           TEXT,
     FOREIGN KEY (firearm_id) REFERENCES firearms(id)
@@ -77,7 +82,7 @@ CREATE TABLE documents (
     filename    TEXT NOT NULL,
     file_data   BLOB NOT NULL,
     mime_type   TEXT NOT NULL,
-    uploaded_at TEXT NOT NULL
+    uploaded_at INTEGER NOT NULL
 );
 
 CREATE TABLE firearm_documents (
@@ -93,19 +98,29 @@ CREATE TABLE events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     firearm_id  INTEGER NOT NULL,
     event_type  TEXT NOT NULL,
-    date        TEXT NOT NULL,
+    date        INTEGER NOT NULL,
     title       TEXT NOT NULL,
     description TEXT,
-    created_at  TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
     FOREIGN KEY (firearm_id) REFERENCES firearms(id)
 );
+
+CREATE TABLE meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+-- Seeded on database creation:
+-- INSERT INTO meta (key, value) VALUES ('schema_version', '1');
 ```
 
 **Notes on the schema:**
 - `ON DELETE CASCADE` is intentionally absent. `deleteFirearm()` and `deleteDocument()` in `db.js` must manually delete related rows in a transaction (see Step 2).
 - `event_type` is free text — new event types can be added without schema changes.
+- `doc_type` is free text — document types are freeform, no fixed enum.
 - `firearm_documents` is a many-to-many join: one document can be associated with multiple firearms (e.g. a single FFL covering a multi-firearm purchase).
 - `round_counts` stores individual sessions. Total round counts are always computed dynamically via `SUM()` — never stored.
+- All date/time columns are `INTEGER` (UTC epoch milliseconds). See date storage note above.
+- `meta` stores application-level key/value pairs. The only key at schema version 1 is `schema_version`. Future migrations increment this value and alter tables as needed.
 
 ## Project structure
 
@@ -160,6 +175,7 @@ fdb/
 | `vite.config.js` | — | Vite: Svelte + Tailwind plugins, `publicDir: 'static'`, `outDir: 'public'`, sqlite-wasm exclude |
 | `.gitlab-ci.yml` | — | CI: install, build, deploy to Pages |
 | `index.html` | — | Browser HTML shell |
+| `src/lib/strings.js` | **YES** | All user-facing strings: empty states, errors, confirmations, toasts, chart labels, titles — imported by both browser components and CLI |
 | `src/lib/db.js` | **YES** | SQLite init, schema, deserialize/serialize, all query helpers — no browser or Node deps |
 | `src/lib/fileAccess.js` | No | Browser: File System Access API + Firefox fallbacks |
 | `src/lib/stores.svelte.js` | No | Browser only: Svelte 5 runes for app state |
@@ -170,6 +186,16 @@ fdb/
 | `cli/fileAccess.js` | No | Node: `fs.readFileSync` / `fs.writeFileSync` |
 
 ## Step-by-step implementation
+
+The implementation is split into two phases. Phase 1 builds the CLI as a standalone proof of concept to validate the data model before any browser UI is written. Phase 2 builds the browser UI on top of the already-validated shared `db.js`.
+
+---
+
+## Phase 1 — Data model and CLI (proof of concept)
+
+**Goal:** A working `fdb` CLI that can create a database, add/edit/delete all record types, and read them back. No browser, no Svelte, no Tailwind. At the end of Phase 1, the schema and all query logic are verified against a real SQLite file.
+
+---
 
 ### Step 1: Project scaffolding
 
@@ -196,6 +222,10 @@ Dependencies to install:
 - `vite` (dev)
 - `tailwindcss` (dev)
 - `@tailwindcss/vite` (dev)
+- `eslint` (dev)
+- `eslint-plugin-svelte` (dev)
+- `prettier` (dev)
+- `prettier-plugin-svelte` (dev)
 - `@sqlite.org/sqlite-wasm`
 - `chart.js`
 - `chartjs-adapter-date-fns`
@@ -212,13 +242,17 @@ The `bin` entry in `package.json` registers the CLI as a local executable:
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src cli",
+    "format": "prettier --write src cli"
   },
   "bin": {
     "fdb": "./cli/index.js"
   }
 }
 ```
+
+Add `.eslintrc.js` (or `eslint.config.js` for flat config) with `eslint-plugin-svelte` and `.prettierrc` to the project root. Auto-format runs on `npm run format`; linting runs on `npm run lint` and in CI.
 
 After `npm install`, running `npm link` (once, locally) makes `fdb` available as a shell command pointing at `cli/index.js`.
 
@@ -238,7 +272,8 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [svelte(), tailwindcss()],
-  publicDir: 'static',           // Avoid conflict with public/ build output
+  base: process.env.VITE_BASE_PATH ?? '/',  // Set via CI variable for subpath deployments
+  publicDir: 'static',                       // Avoid conflict with public/ build output
   optimizeDeps: {
     exclude: ['@sqlite.org/sqlite-wasm'],
   },
@@ -268,7 +303,7 @@ Standard Vite HTML shell:
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Firearm Tracker</title>
+  <title>FDB</title>
 </head>
 <body>
   <div id="app"></div>
@@ -295,17 +330,28 @@ This is the most critical module and the only place SQL lives. It is **shared be
 2. Call `sqlite3InitModule()` -- this returns a promise that resolves with the `sqlite3` API object.
 3. Store the `sqlite3` reference in a module-level variable.
 
+**Schema version constant:**
+Define `CURRENT_SCHEMA_VERSION = 1` at the top of `db.js`. Increment this whenever the schema changes and add a corresponding migration function.
+
 **Creating a new database:**
 1. Call `new sqlite3.oo1.DB(':memory:')` to create a fresh in-memory database.
-2. Run the schema SQL (all five `CREATE TABLE` statements) via `db.exec()`.
-3. Return the `db` instance.
+2. Run the schema SQL (all six `CREATE TABLE` statements, including `meta`) via `db.exec()`.
+3. Insert `('schema_version', '1')` into `meta`.
+4. Return the `db` instance.
 
 **Opening an existing database from a `Uint8Array`:**
 1. Create a new in-memory DB: `new sqlite3.oo1.DB(':memory:')`.
 2. Allocate WASM memory from the byte array: `const p = sqlite3.wasm.allocFromTypedArray(bytes)`.
 3. Call `sqlite3.capi.sqlite3_deserialize(db.pointer, 'main', p, bytes.byteLength, bytes.byteLength, SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE)`.
 4. Check the return code with `db.checkRc(rc)`.
-5. Return the `db` instance.
+5. Read `schema_version` from `meta`. If the table doesn't exist (database predates versioning), treat version as `0`.
+6. If `schema_version < CURRENT_SCHEMA_VERSION`, run each migration function in sequence inside a transaction. Update `meta` after each step.
+7. Return the `db` instance.
+
+**Date helpers:**
+Export two utility functions used everywhere dates are read or written:
+- `toEpoch(localDateString)` — converts a date string from a date picker (local time) to UTC epoch milliseconds: `new Date(localDateString).getTime()`
+- `fromEpoch(ms)` — converts UTC epoch milliseconds to a display string: `new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' })` (browser locale, user's timezone)
 
 **Exporting the database to a `Uint8Array`:**
 1. Call `sqlite3.capi.sqlite3_js_db_export(db.pointer)` which returns a `Uint8Array` of the entire database file.
@@ -335,7 +381,45 @@ Each function takes the `db` instance as its first argument (or reads it from th
 
 **Important detail:** `deleteFirearm(id)` must cascade-delete related `round_counts`, `events`, and `firearm_documents` rows. SQLite foreign keys are not enforced by default -- the module must run `PRAGMA foreign_keys = ON` immediately after opening/creating any database. Alternatively, handle cascades explicitly in the delete function with a transaction.
 
-### Step 3: File Access module (`src/lib/fileAccess.js`)
+### Step 3: CLI file access (`cli/fileAccess.js`)
+
+Node.js file I/O — the CLI equivalent of the browser's File System Access API. Simple and synchronous.
+
+```js
+import { readFileSync, writeFileSync } from 'fs';
+
+export function openFile(path) {
+  return new Uint8Array(readFileSync(path));
+}
+
+export function saveFile(bytes, path) {
+  writeFileSync(path, bytes);
+}
+```
+
+### Step 4: CLI (`cli/index.js`)
+
+See the full CLI specification in the original Step 13 content below. At the end of this step, run through the manual validation checklist:
+
+- `fdb --db test.db firearms add ...` creates a record
+- `fdb --db test.db firearms list` returns it
+- `fdb --db test.db rounds add ...` / `list` / `update` / `delete` all work
+- `fdb --db test.db events add ...` / `list` / `update` / `delete` all work
+- `fdb --db test.db documents add --file ./test.pdf ...` stores a BLOB
+- `fdb --db test.db documents list` shows it
+- `fdb --db test.db firearms delete <id>` removes the firearm and all linked rows
+- Open `test.db` with an external SQLite tool and verify the schema and data look correct
+- Create a second database, verify `schema_version` is `1` in `meta`
+
+---
+
+## Phase 2 — Browser UI
+
+**Goal:** A fully functional browser app built on top of the validated `db.js`. Phase 1 must be complete before Phase 2 begins.
+
+---
+
+### Step 5: Browser file access (`src/lib/fileAccess.js`)
 
 This module abstracts the File System Access API with fallbacks.
 
@@ -352,7 +436,7 @@ This module abstracts the File System Access API with fallbacks.
 **`saveFileAs(bytes)`:**
 Always shows a picker (or falls back to download). Ignores any existing handle.
 
-### Step 4: Svelte app state (`src/lib/stores.svelte.js`) — browser only
+### Step 6: Svelte app state (`src/lib/stores.svelte.js`) — browser only
 
 This module is **browser-only**. It must never be imported by `db.js` or `cli/`. It holds UI and session state for the browser app. Note the `.svelte.js` extension — required for Svelte 5 runes to work in a plain JS module.
 
@@ -380,14 +464,43 @@ export function markClean() { isDirty = false; }
 
 Import and use these directly in Svelte components. `markDirty()` is called by components after any successful mutation — not by `db.js`. `markClean()` is called after a successful save.
 
-### Step 5: Root component and navigation (`App.svelte`, `Sidebar.svelte`, `Landing.svelte`)
+### Step 7: Styling setup (Tailwind CSS + design tokens)
+
+Install Tailwind and establish the design token system before writing any components. All subsequent browser components depend on this being in place.
+
+See the full styling specification in the original Step 12 content. At the end of this step: run `npm run dev` and verify the app loads with the correct background color (`--color-bg`) applied to `<body>`.
+
+### Step 8: Root component and navigation (`App.svelte`, `Sidebar.svelte`, `Landing.svelte`, `Toast.svelte`, `ConfirmModal.svelte`)
 
 **`App.svelte`:**
 - Subscribes to `currentView` and `dbInstance`.
 - If `dbInstance` is null, renders `<Landing />`.
 - If `dbInstance` is set, renders a two-column layout: `<Sidebar />` on the left, content area on the right.
 - The content area switches on `currentView`: `'firearms'` -> `<FirearmList />`, `'firearm-detail'` -> `<FirearmDetail />`, `'documents'` -> `<DocumentList />`.
+- Renders `<Toast />` and `<ConfirmModal />` at the top level (outside the layout) so they overlay everything.
 - Registers a `beforeunload` event listener that checks `$isDirty` and shows a browser-native "unsaved changes" warning if true.
+- Reactively updates `document.title`: `"FDB"` when no database is open; `"FDB — <filename>"` once a file is open (filename derived from `fileHandle.name` or a fallback of `"unsaved"` for new databases).
+
+**`Toast.svelte` (error/feedback system):**
+
+Three tiers of feedback — all driven from a `toasts` array in `stores.svelte.js`:
+- **Inline field errors** — not a toast; rendered beneath the offending input inside each form component.
+- **Toast notifications** — for operation feedback (save success, save failed, round count added, etc.). Small banner, top-right corner, auto-dismiss after ~4 seconds. Accent color for success, red for error. `Toast.svelte` maps over the `toasts` store array and renders each one. Export `showToast(message, type)` from `stores.svelte.js` to push a toast.
+- **Modal error dialog** — for fatal errors only (corrupt file, failed to open, unrecoverable exception). Uses `ConfirmModal.svelte` in error mode (no cancel button, just "OK").
+
+**`ConfirmModal.svelte` (confirmation + fatal error dialog):**
+
+Reusable modal component driven from `stores.svelte.js`. Two modes:
+- **Confirm mode** — title, message, "Cancel" + "Confirm" (danger-styled) buttons. Used for all delete confirmations. Shows consequences where relevant (e.g. "This will also remove 14 round count entries and 3 events.").
+- **Error mode** — title, message, "OK" button only. Used for fatal errors.
+
+Export `showConfirm({ title, message, onConfirm })` and `showError({ title, message })` from `stores.svelte.js`.
+
+**`Sidebar.svelte`:**
+- **Desktop:** fixed left sidebar with nav links (Firearms, Documents), divider, Save button.
+- **Mobile:** hidden. A hamburger button in a top bar opens the sidebar as an overlay (fixed position, full height, z-indexed above content). Tapping outside or a nav link closes it.
+- `<SaveButton />` component embedded in the sidebar.
+- Clicking a nav link sets `currentView`, clears `selectedFirearmId`, closes mobile sidebar overlay.
 
 **`Landing.svelte`:**
 - Two buttons: "Open existing database" and "Create new database".
@@ -405,7 +518,7 @@ Import and use these directly in Svelte components. `markDirty()` is called by c
 - On click: exports the database via `db.exportDatabase()`, calls `saveFile(bytes, $fileHandle)`, updates `fileHandle` if a new handle was returned, calls `markClean()`.
 - Also provides a "Save As..." option that always shows a picker.
 
-### Step 6: Firearm Registry (`firearms/` components)
+### Step 9: Firearm Registry (`firearms/` components)
 
 **`FirearmList.svelte`:**
 - On mount, calls `getAllFirearms()` to get the list with computed total round counts.
@@ -428,7 +541,7 @@ Import and use these directly in Svelte components. `markDirty()` is called by c
 - Renders the firearm header (name, serial, caliber, etc.) with an "Edit" button that opens `FirearmForm`.
 - Below the header, renders the active tab component.
 
-### Step 7: Round Count Tracking (`rounds/` components)
+### Step 10: Round Count Tracking (`rounds/` components)
 
 **`RoundCountList.svelte`:**
 - Props: `firearmId`.
@@ -455,7 +568,7 @@ Import and use these directly in Svelte components. `markDirty()` is called by c
 
 **Chart.js date adapter dependency:** Add `chartjs-adapter-date-fns` and `date-fns` as dependencies. Import the adapter in `RoundCountChart.svelte` (or globally in `main.js`).
 
-### Step 8: Document Management (`documents/` components)
+### Step 11: Document Management (`documents/` components)
 
 **`DocumentList.svelte`:**
 - Two modes: standalone (all documents) and per-firearm (documents linked to a specific firearm).
@@ -484,7 +597,7 @@ Import and use these directly in Svelte components. `markDirty()` is called by c
 - Provide a "Download" button that creates a temporary `<a download>` link.
 - Revoke Blob URLs on component destroy.
 
-### Step 9: Event Log (`events/` components)
+### Step 12: Event Log (`events/` components)
 
 **`EventList.svelte`:**
 - Props: `firearmId`.
@@ -498,7 +611,7 @@ Import and use these directly in Svelte components. `markDirty()` is called by c
 - `created_at` is set automatically to `new Date().toISOString()` on create.
 - On submit: insert or update, mark dirty, close.
 
-### Step 10: Unsaved changes guard
+### Step 13: Unsaved changes guard
 
 In `App.svelte`, register a `beforeunload` handler:
 
@@ -514,7 +627,7 @@ window.addEventListener('beforeunload', handleBeforeUnload);
 
 Clean up in `onDestroy`.
 
-### Step 11: GitLab CI configuration (`.gitlab-ci.yml`)
+### Step 14: GitLab CI configuration (`.gitlab-ci.yml`)
 
 GitLab Pages requires the artifact directory to be named `public/`. Set Vite's output directory to `public/` in `vite.config.js`:
 
@@ -532,10 +645,15 @@ Add `public/` to `.gitignore` (it is build output, not source).
 ```yaml
 image: node:20
 
+variables:
+  VITE_BASE_PATH: "/"   # Override in GitLab CI/CD settings for subpath deployments
+                         # e.g. set to "/fdb/" if serving at username.gitlab.io/fdb/
+
 pages:
   stage: deploy
   script:
     - npm ci
+    - npm run lint
     - npm run build
   artifacts:
     paths:
@@ -544,9 +662,11 @@ pages:
     - main
 ```
 
+Set `VITE_BASE_PATH` as a CI/CD variable in the GitLab project settings (Settings → CI/CD → Variables) rather than hardcoding it in the file. The default `/` works for custom domains at root.
+
 **COOP/COEP headers:** Not required for this app. The in-memory `oo1` API does not use `SharedArrayBuffer` or web workers. The headers are set in the Vite dev server config only to suppress sqlite-wasm's console warnings when it probes for OPFS support at startup. GitLab Pages does not serve these headers, but that has no effect on functionality.
 
-### Step 12: Styling (Tailwind CSS + design token theming)
+### Step 7 detail: Styling (Tailwind CSS + design token theming)
 
 This app uses **Tailwind CSS v4** with a centralized design token system. **All color and surface values are defined in one place** (`src/app.css`) so the app can be reskinned by editing a single file. Components reference semantic token names — never raw color values scattered across markup.
 
@@ -591,9 +711,9 @@ The app must work on both mobile and desktop. The layout adapts:
 - **Desktop (md+):** Fixed sidebar on the left (~240px), content area fills the rest. Full tables visible.
 - **Mobile (<md):** Sidebar collapses. Navigation moves to a top bar with a hamburger menu or a bottom navigation bar. Tables may reflow to stacked card layout.
 
-The exact mobile navigation pattern is an **open question** — see Open Questions section.
+Mobile navigation: hamburger menu in a top bar (see Step 8).
 
-### Step 13: CLI (`cli/index.js` and `cli/fileAccess.js`)
+### Step 4 detail: CLI (`cli/index.js`)
 
 The CLI is a first-class interface to the same database. It uses the same `src/lib/db.js` shared module for all queries. No Svelte, no browser APIs.
 
@@ -665,6 +785,15 @@ fdb --db <path> documents add --file <filepath> --type <t> [--firearm <id>]
 - Default output: formatted table using `console.table` or a simple padded-column renderer
 - `--json` flag: outputs raw JSON (useful for scripting: `fdb firearms list --json | jq '.[].name'`)
 - Errors: written to stderr, exit code 1
+
+**Config file (`~/.fdbrc` or `~/.config/fdb/config.json`):**
+
+The CLI loads defaults from a config file before applying CLI flags. Any CLI flag overrides the config. Supported config keys:
+- `db` — default database path (e.g. `~/firearms.db`)
+
+Resolution order (highest priority first): CLI flag → config file → no default (error if required).
+
+`cli/index.js` reads the config file on startup using `fs.existsSync` + `JSON.parse`. If the file doesn't exist, silently skip. If it exists but is malformed JSON, print a warning to stderr and continue without defaults.
 
 **No build step:** `cli/index.js` runs directly with Node.js (`node cli/index.js` or `fdb` after `npm link`). It imports `src/lib/db.js` via a relative path. The `@sqlite.org/sqlite-wasm` package has a Node.js entry point that is used automatically when imported from Node — no Vite bundling required.
 
@@ -742,7 +871,8 @@ A table of all firearms.
 - Clicking a row navigates to Firearm Detail for that firearm
 - **"Add Firearm"** button above the table opens the add form
 - Each row has an **Edit** icon/button and a **Delete** icon/button
-- Delete requires confirmation — pattern TBD (see Open Questions)
+- Delete requires confirmation via `ConfirmModal` showing how many round count entries and events will also be deleted
+- **Sortable columns:** Name, Caliber, Purchase Date, Total Rounds. Click a column header to sort ascending; click again for descending. Default sort: Name ascending. No filtering in v1.
 - Empty state: "No firearms yet. Add your first firearm." with an "Add Firearm" button
 
 **Form: Add / Edit Firearm** — presentation pattern TBD (see Open Questions)
@@ -976,234 +1106,30 @@ Since this is a static browser app with no backend, testing focuses on:
 4. **Default theme:** Warm gray/dark (stone/zinc palette, amber accent). No blue tints. All tokens in `app.css`.
 5. **Maximum database size:** Warn at 100MB with a banner. No hard refusal.
 6. **Chart.js date adapter:** `chartjs-adapter-date-fns` with `date-fns`.
-7. **Slide-in panels:** Explicitly excluded. Forms are either modal overlays or inline — see open questions.
+7. **Slide-in panels:** Explicitly excluded.
 8. **Responsive:** App must work on mobile and desktop. Layout adapts at `md` breakpoint.
+9. **Error handling (OQ-1):** Inline field errors for form validation. Toast notifications for operation feedback (save, mutations). Custom modal dialog for fatal errors.
+10. **Form presentation (OQ-2):** Modal overlay for all add/edit forms.
+11. **Mobile navigation (OQ-3):** Hamburger menu in a top bar. Sidebar opens as a full-height overlay.
+12. **Document viewer (OQ-4):** Opens in a new browser tab via Blob URL.
+13. **Confirmation dialogs (OQ-5):** Custom modal (`ConfirmModal.svelte`), shows consequences for destructive operations.
+14. **Document unlink vs delete (OQ-6):** Unlink only from firearm tab. Never auto-delete. Global delete only from the Documents screen.
+15. **Events display (OQ-7):** Table.
+16. **Schema migration (OQ-8):** `meta` table stores `schema_version`. `openDatabase()` checks version and runs migrations in sequence.
+17. **Date storage and display (OQ-9):** Stored as UTC epoch milliseconds (`INTEGER`). Displayed in user's local timezone using browser locale (`toLocaleDateString()`).
+18. **GitLab Pages base path (OQ-10):** `VITE_BASE_PATH` CI variable. Defaults to `/`.
+19. **Browser support (OQ-11):** Chrome (latest). Firefox fallback for file save only.
+20. **List sorting (OQ-12):** Firearms list sortable by Name, Caliber, Purchase Date, Total Rounds. Default: Name ascending. No filtering in v1.
+21. **Close/switch database (OQ-13):** Not in v1.
+22. **Data export (OQ-14):** Not in v1.
+23. **Accessibility (OQ-15):** Minimum viable — semantic HTML, keyboard-navigable forms. No full WCAG audit in v1.
+24. **CLI config file (OQ-16):** `~/.fdbrc` JSON config for defaults (e.g. `db` path). CLI flags override config.
+25. **Document type (OQ-17):** Freeform text input.
+26. **Linting and formatting (OQ-18):** ESLint + Prettier. `npm run lint` and `npm run format`. Both run in CI.
+27. **App title and favicon (OQ-19):** Title is dynamic — `"FDB"` on the landing screen, `"FDB — <filename>"` once a database is open. `App.svelte` updates `document.title` reactively when `fileHandle` or the filename changes. Favicon: browser default for v1.
 
 ---
 
 ## Open Questions
 
-> **These must be resolved before implementation begins.** Each question is marked with its impact scope.
-
----
-
-### ❓ OQ-1 — Error handling patterns `[BLOCKER]`
-
-What is the standard pattern for surfacing errors to the user?
-
-Errors include: file open failure, duplicate serial number, failed save, corrupt database, unexpected JS exceptions.
-
-Options:
-- **Toast notifications** — small temporary banners that appear and auto-dismiss (e.g., top-right corner). Non-blocking, good for transient feedback.
-- **Inline field errors** — validation errors shown beneath the offending field. Only applicable to form validation.
-- **Modal error dialog** — a blocking overlay the user must dismiss. Appropriate for fatal errors (file corrupt, save failed).
-- **Combination:** inline for form validation, toast for operation feedback (save success/failure), modal for fatal errors.
-
-A decision here affects every component. Must be resolved before Step 5 onward.
-
----
-
-### ❓ OQ-2 — Form presentation: modal overlay vs inline `[BLOCKER]`
-
-How do add/edit forms appear? Applies to: Add Firearm, Edit Firearm, Add/Edit Round Count Session, Add/Edit Event, Upload Document.
-
-Options:
-- **Modal overlay** — a centered dialog with a dimmed backdrop. Keeps context visible behind the form. Standard for most CRUD apps. Works well on both mobile and desktop.
-- **Inline expansion** — the form appears in-place within the list (accordion-style or replacing the row). Keeps the user in context without an overlay. Can feel cramped on mobile.
-
-> Slide-in panels are explicitly excluded.
-
-Must be resolved before Steps 6–9.
-
----
-
-### ❓ OQ-3 — Mobile navigation pattern `[BLOCKER]`
-
-On narrow screens the sidebar must collapse. What replaces it?
-
-Options:
-- **Top bar with hamburger menu** — sidebar slides in as an overlay when hamburger is tapped. Common on web apps.
-- **Bottom navigation bar** — nav links move to a fixed bar at the bottom of the screen (iOS/Android app pattern). More thumb-friendly on mobile.
-- **Top tab bar** — nav items displayed as tabs across the top.
-
-Must be resolved before Step 5 (App shell).
-
----
-
-### ❓ OQ-4 — Document viewer presentation `[BLOCKER]`
-
-When the user clicks "View" on a document, how does it open?
-
-Options:
-- **Full-screen modal overlay** — document fills the viewport with a close button. Good for PDFs.
-- **New browser tab** — open the Blob URL in a new tab. Simple, leverages the browser's native PDF viewer. No custom UI needed.
-- **Embedded panel** — document renders inline below the document list. Less intrusive but limited space.
-
----
-
-### ❓ OQ-5 — Confirmation dialog pattern `[BLOCKER]`
-
-Delete actions (firearm, round count session, event, document) require confirmation. What pattern?
-
-Options:
-- **Native `window.confirm()`** — one line of code, no UI work, but looks inconsistent with the app design and is blocked by some browsers in certain contexts.
-- **Custom modal dialog** — styled consistently with the app, can show consequences ("This will also delete 14 round count sessions and 3 events"). More work but better UX.
-
----
-
-### ❓ OQ-8 — Schema migration strategy `[BLOCKER]`
-
-The schema is fixed today, but the app will evolve. When a user opens a `.db` file created by an older version of the app, what happens if the schema has changed?
-
-SQLite provides `PRAGMA user_version` as a built-in integer for tracking schema versions. Options:
-
-- **No migration support** — schema is fixed forever. Any change requires a new database. Simple, but brittle long-term.
-- **`PRAGMA user_version` + migration functions** — on open, check `user_version`. If lower than the current version, run upgrade SQL in sequence (e.g., `ALTER TABLE` to add columns). Write the new version number when done.
-- **Fail loudly on mismatch** — if the opened file's `user_version` doesn't match, refuse to open it and tell the user to use the CLI to migrate.
-
-This affects `db.js` architecture (the `openDatabase` function must check the version). Must be resolved before Step 2.
-
----
-
-### ❓ OQ-9 — Date display and timezone handling `[BLOCKER]`
-
-Dates are stored as ISO 8601 UTC strings. But shooting sessions and purchase dates are calendar dates in the user's local timezone — "I shot on April 4th" should not silently become April 3rd UTC.
-
-Two separate sub-questions:
-
-1. **Storage format for calendar dates:** Should date-only fields (`round_counts.date`, `events.date`, `firearms.purchase_date`) be stored as `YYYY-MM-DD` plain strings rather than full UTC timestamps? This avoids the timezone shift problem entirely for fields that represent a calendar day, not a moment in time.
-
-2. **Display format:** How should dates be shown in the UI? Options: user's locale (`toLocaleDateString()`), a fixed format (`DD MMM YYYY`), or ISO (`YYYY-MM-DD`).
-
-Must be resolved before Step 2 (schema notes) and Steps 6–9 (date pickers and display).
-
----
-
-### ❓ OQ-10 — GitLab Pages deployment base path `[BLOCKER]`
-
-If the app is deployed to a GitLab Pages subpath (e.g., `username.gitlab.io/fdb/` rather than a custom domain at root), Vite must be configured with `base: '/fdb/'` in `vite.config.js`. Without this, all asset URLs will be wrong and the app will fail to load.
-
-Options:
-- **Hardcode the base path** — set `base` in `vite.config.js` to the known subpath.
-- **Use a CI environment variable** — set `VITE_BASE_PATH` in GitLab CI and read it in `vite.config.js` with `process.env.VITE_BASE_PATH ?? '/'`.
-- **Deploy to a custom domain at root** — base path is always `/`, no config needed.
-
-Must be resolved before Step 1 (Vite config) and Step 11 (CI config).
-
----
-
-### ❓ OQ-11 — Browser support targets `[BLOCKER]`
-
-What browsers must the app support? This affects:
-- Whether Vite needs to include polyfills (`@vitejs/plugin-legacy`)
-- Which CSS features can be used
-- Whether `File System Access API` is expected to work (Chrome/Edge only — Firefox fallback is already planned)
-
-Minimum viable targets to discuss: Chrome/Edge latest, Firefox latest, Safari latest. Older versions or IE are almost certainly out of scope, but should be confirmed.
-
-Must be resolved before Step 1 (Vite config).
-
----
-
-### ❓ OQ-6 — Document "unlink vs delete" from firearm tab `[NON-BLOCKER — decide during Step 8]`
-
-When a user clicks Delete on a document from within a firearm's Documents tab, what happens?
-
-- **Unlink only** — removes the `firearm_documents` association. Document remains in the global Documents list and can still be associated with other firearms.
-- **Delete globally if last association** — if this was the only firearm the document was linked to, delete the document entirely.
-- **Always unlink, never auto-delete** — user must go to the global Documents screen to delete a document permanently.
-
----
-
-### ❓ OQ-7 — Events display: table vs cards `[NON-BLOCKER — decide during Step 9]`
-
-The event log can be displayed as:
-- **Table** — consistent with other list views. Compact. Works well when descriptions are short.
-- **Card list** — each event is a card with more vertical space. Better for longer descriptions. More visual weight.
-
----
-
-### ❓ OQ-12 — List sorting and filtering `[NON-BLOCKER — decide during Steps 6–9]`
-
-Can users sort or filter the main lists? Not currently specified.
-
-- **Firearms list:** sortable by name, caliber, purchase date, total rounds? Searchable by name or serial number?
-- **Round counts:** always sorted by date — should the user be able to reverse the order?
-- **Events:** sorted by date descending — should the user be able to filter by event type?
-- **Documents:** filterable by `doc_type` (already mentioned) — should the user be able to search by filename?
-
-None of this requires schema changes, but affects component complexity.
-
----
-
-### ❓ OQ-13 — Close / switch database workflow `[NON-BLOCKER — decide during Step 5]`
-
-The app opens one file at a time. Is there a way to close the current database and return to the Landing screen to open a different one? Or does the user have to reload the page?
-
-If supported: a "Close database" option should appear in the sidebar. If there are unsaved changes, prompt first.
-
----
-
-### ❓ OQ-14 — Data export `[NON-BLOCKER]`
-
-Beyond saving the `.db` file, should users be able to export data in other formats?
-
-- **CSV export** — export firearms list, round count history, or event log as CSV. Useful for spreadsheets and insurance documentation.
-- **Print view** — a print-friendly summary of a firearm's record.
-- **No export** — the `.db` file is the export; users can open it with any SQLite tool.
-
-Not required for v1, but worth deciding so it doesn't get designed out.
-
----
-
-### ❓ OQ-15 — Accessibility requirements `[NON-BLOCKER]`
-
-What level of accessibility is required?
-
-- Keyboard navigation through all forms and lists?
-- ARIA labels on interactive elements?
-- Screen reader compatibility?
-- Color contrast compliance (WCAG AA)?
-
-The warm dark theme should be checked for contrast ratios on text/background combinations regardless.
-
----
-
-### ❓ OQ-16 — CLI default database path and environment variable `[NON-BLOCKER — decide during Step 13]`
-
-Should the CLI support a default database path so users don't have to type `--db ~/firearms.db` on every command?
-
-Options:
-- **Always require `--db`** — explicit, no ambiguity.
-- **`FDB_DB` environment variable** — if set, used as the default. `--db` overrides it. Users add `export FDB_DB=~/firearms.db` to their shell profile.
-- **Config file** — `~/.fdbrc` or similar. More complex.
-
----
-
-### ❓ OQ-17 — Document type: fixed options vs free text `[NON-BLOCKER — decide during Step 8]`
-
-The upload form currently proposes fixed options ("FFL", "Receipt", "Manual", "Other"). The schema stores `doc_type` as free text with no constraint.
-
-- **Fixed select** — predictable, filterable, consistent. But inflexible if users have other document types.
-- **Fixed options + free text fallback** — select with an "Other (specify)" option that reveals a text input.
-- **Fully free text with suggestions** — same pattern as event types: a text input with a `<datalist>` of suggested values.
-
----
-
-### ❓ OQ-18 — Linting and code style tooling `[NON-BLOCKER — decide during Step 1]`
-
-Should the project include:
-- **ESLint** — catch JS/Svelte errors and enforce style rules
-- **Prettier** — auto-format on save
-- **Both** — standard combination; Prettier handles formatting, ESLint handles logic rules
-
-Affects `package.json` and project scaffolding. No functional impact but affects developer experience and CI.
-
----
-
-### ❓ OQ-19 — App title and favicon `[NON-BLOCKER — decide during Step 1]`
-
-- What text appears in the browser tab? Options: "Firearm Tracker", "FDB", or dynamic (e.g., "Firearm Tracker — firearms.db" once a file is open).
-- Is there a custom favicon, or the browser default?
-
----
+> All questions resolved. No blockers remain — implementation can begin.
