@@ -116,8 +116,7 @@ fdb/
   package.json
   vite.config.js
   index.html
-  static/
-    coi-serviceworker.js          # (OPTIONAL -- see note below)
+  static/                         # Static assets served by Vite (favicon, etc.)
   public/                         # Build output only -- gitignored, never committed
   src/
     lib/
@@ -150,7 +149,7 @@ fdb/
     fileAccess.js                 # Node: fs.readFileSync / fs.writeFileSync wrappers
 ```
 
-**Note on `static/` directory:** Vite's `publicDir` is set to `static/` (not the default `public/`) to avoid conflicts with the `public/` build output directory. Any static assets (e.g., `coi-serviceworker.js`) go in `static/`. The `coi-serviceworker.js` file is only needed if a future requirement adds OPFS support or web workers — not required for the current in-memory architecture.
+**Note on `static/` directory:** Vite's `publicDir` is set to `static/` (not the default `public/`) to avoid conflicts with the `public/` build output directory. Static assets such as a favicon go here. No service worker or other network-interception files are needed — this is a fully offline app with no network calls.
 
 ## Files to be created
 
@@ -281,8 +280,9 @@ Standard Vite HTML shell:
 **`src/main.js`**
 
 ```js
+import { mount } from 'svelte';
 import App from './App.svelte';
-const app = new App({ target: document.getElementById('app') });
+const app = mount(App, { target: document.getElementById('app') });
 export default app;
 ```
 
@@ -544,9 +544,7 @@ pages:
     - main
 ```
 
-The implementer should verify which convention the target GitLab instance uses.
-
-**COOP/COEP headers on GitLab Pages:** GitLab Pages does **not** support custom response headers via configuration files. If future requirements add OPFS support, the `coi-serviceworker` approach (a service worker that intercepts responses and adds headers) would be needed. For the current in-memory architecture, this is not required.
+**COOP/COEP headers:** Not required for this app. The in-memory `oo1` API does not use `SharedArrayBuffer` or web workers. The headers are set in the Vite dev server config only to suppress sqlite-wasm's console warnings when it probes for OPFS support at startup. GitLab Pages does not serve these headers, but that has no effect on functionality.
 
 ### Step 12: Styling (Tailwind CSS + design token theming)
 
@@ -1053,6 +1051,60 @@ Options:
 
 ---
 
+### ❓ OQ-8 — Schema migration strategy `[BLOCKER]`
+
+The schema is fixed today, but the app will evolve. When a user opens a `.db` file created by an older version of the app, what happens if the schema has changed?
+
+SQLite provides `PRAGMA user_version` as a built-in integer for tracking schema versions. Options:
+
+- **No migration support** — schema is fixed forever. Any change requires a new database. Simple, but brittle long-term.
+- **`PRAGMA user_version` + migration functions** — on open, check `user_version`. If lower than the current version, run upgrade SQL in sequence (e.g., `ALTER TABLE` to add columns). Write the new version number when done.
+- **Fail loudly on mismatch** — if the opened file's `user_version` doesn't match, refuse to open it and tell the user to use the CLI to migrate.
+
+This affects `db.js` architecture (the `openDatabase` function must check the version). Must be resolved before Step 2.
+
+---
+
+### ❓ OQ-9 — Date display and timezone handling `[BLOCKER]`
+
+Dates are stored as ISO 8601 UTC strings. But shooting sessions and purchase dates are calendar dates in the user's local timezone — "I shot on April 4th" should not silently become April 3rd UTC.
+
+Two separate sub-questions:
+
+1. **Storage format for calendar dates:** Should date-only fields (`round_counts.date`, `events.date`, `firearms.purchase_date`) be stored as `YYYY-MM-DD` plain strings rather than full UTC timestamps? This avoids the timezone shift problem entirely for fields that represent a calendar day, not a moment in time.
+
+2. **Display format:** How should dates be shown in the UI? Options: user's locale (`toLocaleDateString()`), a fixed format (`DD MMM YYYY`), or ISO (`YYYY-MM-DD`).
+
+Must be resolved before Step 2 (schema notes) and Steps 6–9 (date pickers and display).
+
+---
+
+### ❓ OQ-10 — GitLab Pages deployment base path `[BLOCKER]`
+
+If the app is deployed to a GitLab Pages subpath (e.g., `username.gitlab.io/fdb/` rather than a custom domain at root), Vite must be configured with `base: '/fdb/'` in `vite.config.js`. Without this, all asset URLs will be wrong and the app will fail to load.
+
+Options:
+- **Hardcode the base path** — set `base` in `vite.config.js` to the known subpath.
+- **Use a CI environment variable** — set `VITE_BASE_PATH` in GitLab CI and read it in `vite.config.js` with `process.env.VITE_BASE_PATH ?? '/'`.
+- **Deploy to a custom domain at root** — base path is always `/`, no config needed.
+
+Must be resolved before Step 1 (Vite config) and Step 11 (CI config).
+
+---
+
+### ❓ OQ-11 — Browser support targets `[BLOCKER]`
+
+What browsers must the app support? This affects:
+- Whether Vite needs to include polyfills (`@vitejs/plugin-legacy`)
+- Which CSS features can be used
+- Whether `File System Access API` is expected to work (Chrome/Edge only — Firefox fallback is already planned)
+
+Minimum viable targets to discuss: Chrome/Edge latest, Firefox latest, Safari latest. Older versions or IE are almost certainly out of scope, but should be confirmed.
+
+Must be resolved before Step 1 (Vite config).
+
+---
+
 ### ❓ OQ-6 — Document "unlink vs delete" from firearm tab `[NON-BLOCKER — decide during Step 8]`
 
 When a user clicks Delete on a document from within a firearm's Documents tab, what happens?
@@ -1068,5 +1120,90 @@ When a user clicks Delete on a document from within a firearm's Documents tab, w
 The event log can be displayed as:
 - **Table** — consistent with other list views. Compact. Works well when descriptions are short.
 - **Card list** — each event is a card with more vertical space. Better for longer descriptions. More visual weight.
+
+---
+
+### ❓ OQ-12 — List sorting and filtering `[NON-BLOCKER — decide during Steps 6–9]`
+
+Can users sort or filter the main lists? Not currently specified.
+
+- **Firearms list:** sortable by name, caliber, purchase date, total rounds? Searchable by name or serial number?
+- **Round counts:** always sorted by date — should the user be able to reverse the order?
+- **Events:** sorted by date descending — should the user be able to filter by event type?
+- **Documents:** filterable by `doc_type` (already mentioned) — should the user be able to search by filename?
+
+None of this requires schema changes, but affects component complexity.
+
+---
+
+### ❓ OQ-13 — Close / switch database workflow `[NON-BLOCKER — decide during Step 5]`
+
+The app opens one file at a time. Is there a way to close the current database and return to the Landing screen to open a different one? Or does the user have to reload the page?
+
+If supported: a "Close database" option should appear in the sidebar. If there are unsaved changes, prompt first.
+
+---
+
+### ❓ OQ-14 — Data export `[NON-BLOCKER]`
+
+Beyond saving the `.db` file, should users be able to export data in other formats?
+
+- **CSV export** — export firearms list, round count history, or event log as CSV. Useful for spreadsheets and insurance documentation.
+- **Print view** — a print-friendly summary of a firearm's record.
+- **No export** — the `.db` file is the export; users can open it with any SQLite tool.
+
+Not required for v1, but worth deciding so it doesn't get designed out.
+
+---
+
+### ❓ OQ-15 — Accessibility requirements `[NON-BLOCKER]`
+
+What level of accessibility is required?
+
+- Keyboard navigation through all forms and lists?
+- ARIA labels on interactive elements?
+- Screen reader compatibility?
+- Color contrast compliance (WCAG AA)?
+
+The warm dark theme should be checked for contrast ratios on text/background combinations regardless.
+
+---
+
+### ❓ OQ-16 — CLI default database path and environment variable `[NON-BLOCKER — decide during Step 13]`
+
+Should the CLI support a default database path so users don't have to type `--db ~/firearms.db` on every command?
+
+Options:
+- **Always require `--db`** — explicit, no ambiguity.
+- **`FDB_DB` environment variable** — if set, used as the default. `--db` overrides it. Users add `export FDB_DB=~/firearms.db` to their shell profile.
+- **Config file** — `~/.fdbrc` or similar. More complex.
+
+---
+
+### ❓ OQ-17 — Document type: fixed options vs free text `[NON-BLOCKER — decide during Step 8]`
+
+The upload form currently proposes fixed options ("FFL", "Receipt", "Manual", "Other"). The schema stores `doc_type` as free text with no constraint.
+
+- **Fixed select** — predictable, filterable, consistent. But inflexible if users have other document types.
+- **Fixed options + free text fallback** — select with an "Other (specify)" option that reveals a text input.
+- **Fully free text with suggestions** — same pattern as event types: a text input with a `<datalist>` of suggested values.
+
+---
+
+### ❓ OQ-18 — Linting and code style tooling `[NON-BLOCKER — decide during Step 1]`
+
+Should the project include:
+- **ESLint** — catch JS/Svelte errors and enforce style rules
+- **Prettier** — auto-format on save
+- **Both** — standard combination; Prettier handles formatting, ESLint handles logic rules
+
+Affects `package.json` and project scaffolding. No functional impact but affects developer experience and CI.
+
+---
+
+### ❓ OQ-19 — App title and favicon `[NON-BLOCKER — decide during Step 1]`
+
+- What text appears in the browser tab? Options: "Firearm Tracker", "FDB", or dynamic (e.g., "Firearm Tracker — firearms.db" once a file is open).
+- Is there a custom favicon, or the browser default?
 
 ---
