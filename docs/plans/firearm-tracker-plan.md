@@ -45,6 +45,68 @@ However, the File System Access API (`showOpenFilePicker` / `showSaveFilePicker`
 | **SvelteKit** instead of plain Svelte + Vite | SvelteKit adds SSR, routing, and server hooks that are unnecessary for a fully static, single-page app. Plain Svelte + Vite is simpler and produces a smaller bundle. |
 | **IndexedDB for persistence** | Would tie data to a single browser profile. The `.db` file approach lets users back up, move between machines, and inspect the database with standard SQLite tools. |
 
+## Database schema
+
+All timestamps are stored as `TEXT` in ISO 8601 UTC format (e.g. `2026-04-04T19:59:00.000000+00:00`).
+
+```sql
+CREATE TABLE firearms (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    serial_number   TEXT UNIQUE NOT NULL,
+    manufacturer    TEXT,
+    caliber         TEXT,
+    purchase_price  REAL,
+    purchase_date   TEXT,
+    ffl_dealer      TEXT,
+    notes           TEXT
+);
+
+CREATE TABLE round_counts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    firearm_id      INTEGER NOT NULL,
+    date            TEXT NOT NULL,
+    rounds_fired    INTEGER NOT NULL,
+    notes           TEXT,
+    FOREIGN KEY (firearm_id) REFERENCES firearms(id)
+);
+
+CREATE TABLE documents (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_type    TEXT,
+    filename    TEXT NOT NULL,
+    file_data   BLOB NOT NULL,
+    mime_type   TEXT NOT NULL,
+    uploaded_at TEXT NOT NULL
+);
+
+CREATE TABLE firearm_documents (
+    firearm_id  INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    notes       TEXT,
+    PRIMARY KEY (firearm_id, document_id),
+    FOREIGN KEY (firearm_id) REFERENCES firearms(id),
+    FOREIGN KEY (document_id) REFERENCES documents(id)
+);
+
+CREATE TABLE events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    firearm_id  INTEGER NOT NULL,
+    event_type  TEXT NOT NULL,
+    date        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    description TEXT,
+    created_at  TEXT NOT NULL,
+    FOREIGN KEY (firearm_id) REFERENCES firearms(id)
+);
+```
+
+**Notes on the schema:**
+- `ON DELETE CASCADE` is intentionally absent. `deleteFirearm()` and `deleteDocument()` in `db.js` must manually delete related rows in a transaction (see Step 2).
+- `event_type` is free text — new event types can be added without schema changes.
+- `firearm_documents` is a many-to-many join: one document can be associated with multiple firearms (e.g. a single FFL covering a multi-firearm purchase).
+- `round_counts` stores individual sessions. Total round counts are always computed dynamically via `SUM()` — never stored.
+
 ## Project structure
 
 ```
