@@ -119,14 +119,35 @@ fdb --db firearms.db rounds list --firearm 1 --json --date-format 'MM/dd/yyyy'
 
 ---
 
+## Browser UI
+
+### Run locally (development)
+
+```sh
+npm run dev
+```
+
+Opens a Vite dev server at `http://localhost:5173`. The app runs entirely in your browser — no server, no accounts. Your data stays in the `.db` file you open or create.
+
+### Run locally (production build)
+
+```sh
+npm run build       # compiles to public/
+npx serve public    # serve the built app
+```
+
+Then open `http://localhost:3000`.
+
+### Deploy to GitLab Pages
+
+Push to `main`. The CI pipeline builds and deploys automatically. Set the `VITE_BASE_PATH` CI/CD variable in project settings if your Pages URL is a subpath (e.g. `https://user.gitlab.io/fdb/` → set `VITE_BASE_PATH=/fdb/`).
+
 ## Development
 
 ```sh
 npm run test:run    # run all tests
 npm run lint        # ESLint
 npm run format      # Prettier
-npm run dev         # start Vite dev server (browser UI)
-npm run build       # production build → public/
 ```
 
 ---
