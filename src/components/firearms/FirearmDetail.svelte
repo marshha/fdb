@@ -54,7 +54,13 @@
         <p class="mt-1 text-sm text-text-muted">
           {#if firearm.manufacturer}{firearm.manufacturer} · {/if}
           {#if firearm.caliber}{firearm.caliber} · {/if}
-          S/N: {firearm.serial_number}
+          S/N:
+          <button
+            type="button"
+            onclick={() => (appState.showSerials = !appState.showSerials)}
+            class="font-mono hover:text-text-primary"
+            title={appState.showSerials ? 'Hide serial number' : 'Show serial number'}
+          >{appState.showSerials ? firearm.serial_number : '••••••••'}</button>
           {#if firearm.purchase_date} · Purchased {fromEpoch(firearm.purchase_date)}{/if}
           {#if firearm.ffl_dealer} · FFL: {firearm.ffl_dealer}{/if}
         </p>

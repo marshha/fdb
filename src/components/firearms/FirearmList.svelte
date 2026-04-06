@@ -137,7 +137,17 @@
               Caliber{sortArrow('caliber')}
             </button>
           </th>
-          <th class="px-4 py-3 font-medium">Serial Number</th>
+          <th class="px-4 py-3 font-medium">
+            <button
+              type="button"
+              onclick={() => (appState.showSerials = !appState.showSerials)}
+              class="flex items-center gap-1 font-medium hover:text-text-primary"
+              title={appState.showSerials ? 'Hide serial numbers' : 'Show serial numbers'}
+            >
+              Serial Number
+              <span class="text-xs opacity-60">{appState.showSerials ? '🔓' : '🔒'}</span>
+            </button>
+          </th>
           <th class="px-4 py-3">
             <button type="button" onclick={() => handleSort('total_rounds')} class="font-medium hover:text-text-primary">
               Total Rounds{sortArrow('total_rounds')}
@@ -160,7 +170,9 @@
             <td class="px-4 py-3 font-medium text-text-primary">{firearm.name}</td>
             <td class="px-4 py-3 text-text-muted">{firearm.manufacturer ?? '—'}</td>
             <td class="px-4 py-3 text-text-muted">{firearm.caliber ?? '—'}</td>
-            <td class="px-4 py-3 text-text-muted">{firearm.serial_number}</td>
+            <td class="px-4 py-3 text-text-muted">
+              {appState.showSerials ? firearm.serial_number : '••••••••'}
+            </td>
             <td class="px-4 py-3 text-text-primary">{firearm.total_rounds}</td>
             <td class="px-4 py-3 text-text-muted">
               {firearm.purchase_date ? fromEpoch(firearm.purchase_date) : '—'}

@@ -24,6 +24,9 @@ export const appState = $state({
 
   // Modal state: null | { title, message, onConfirm } | { title, message, isError }
   modalState: null,
+
+  // Privacy: whether serial numbers are visible in the UI
+  showSerials: false,
 })
 
 export function markDirty() {
