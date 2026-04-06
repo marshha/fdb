@@ -7,6 +7,7 @@ export default defineConfig({
     projects: [
       {
         name: 'node',
+        plugins: [svelte()],
         test: {
           environment: 'node',
           include: ['tests/node/**/*.test.js'],
