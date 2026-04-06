@@ -11,6 +11,12 @@ export default [
     },
   },
   {
+    files: ['src/**/*.js', 'src/**/*.svelte'],
+    languageOptions: {
+      globals: globals.browser,
+    },
+  },
+  {
     files: ['cli/**/*.js'],
     languageOptions: {
       globals: globals.node,
