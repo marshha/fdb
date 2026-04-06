@@ -35,15 +35,14 @@
 <div class="flex min-h-screen flex-col items-center justify-center gap-6 bg-bg p-8">
   <h1 class="text-4xl font-bold text-accent">FDB</h1>
   <p class="max-w-sm text-center text-text-muted">
-    A personal firearms database that runs entirely in your browser.
-    Your data lives in a file on your machine — nothing is sent to any server, ever.
+    {strings.landing.description}
     <br />
     <a
-      href="https://github.com/marshha/fdb"
+      href={strings.landing.verifyLinkUrl}
       target="_blank"
       rel="noopener noreferrer"
       class="text-accent underline hover:text-accent-hover"
-    >Verify it yourself.</a>
+    >{strings.landing.verifyLinkText}</a>
   </p>
 
   {#if !window.showSaveFilePicker}

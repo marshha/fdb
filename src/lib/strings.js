@@ -46,6 +46,11 @@ export const strings = {
     noDataLabel: 'No rounds logged yet.',
     yAxisLabel:  'Cumulative Rounds',
   },
+  landing: {
+    description: 'A personal firearms database that runs entirely in your browser. Your data lives in a file on your machine — nothing is sent to any server, ever.',
+    verifyLinkText: 'Verify it yourself.',
+    verifyLinkUrl:  'https://github.com/marshha/fdb',
+  },
   firefox: {
     saveWarning: 'Your browser does not support in-place file saving. Each save will download a new copy of your database.',
   },
