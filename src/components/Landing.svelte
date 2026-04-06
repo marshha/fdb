@@ -37,6 +37,7 @@
   <p class="max-w-sm text-center text-text-muted">
     A personal firearms database that runs entirely in your browser.
     Your data lives in a file on your machine — nothing is sent to any server, ever.
+    <br />
     <a
       href="https://github.com/marshha/fdb"
       target="_blank"
