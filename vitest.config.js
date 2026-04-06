@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { playwright } from '@vitest/browser-playwright'
 
 export default defineConfig({
   test: {
@@ -17,24 +18,27 @@ export default defineConfig({
           },
         },
       },
-      // Activated in Phase 2:
-      // {
-      //   name: 'component',
-      //   plugins: [svelte()],
-      //   test: {
-      //     environment: 'happy-dom',
-      //     include: ['tests/component/**/*.test.js'],
-      //     setupFiles: ['tests/component/setup.js'],
-      //   },
-      // },
-      // {
-      //   name: 'browser',
-      //   plugins: [svelte()],
-      //   test: {
-      //     browser: { enabled: true, name: 'chromium', provider: 'playwright' },
-      //     include: ['tests/browser/**/*.test.js'],
-      //   },
-      // },
+      {
+        name: 'component',
+        plugins: [svelte()],
+        resolve: {
+          conditions: ['browser'],
+        },
+        test: {
+          globals: true,
+          environment: 'happy-dom',
+          include: ['tests/component/**/*.test.js'],
+          setupFiles: ['tests/component/setup.js'],
+        },
+      },
+      {
+        name: 'browser',
+        plugins: [svelte()],
+        test: {
+          browser: { enabled: true, instances: [{ browser: 'chromium' }], provider: playwright },
+          include: ['tests/browser/**/*.test.js'],
+        },
+      },
     ],
   },
 })
