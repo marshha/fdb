@@ -72,6 +72,36 @@ describe('App.svelte', () => {
   })
 })
 
+describe('beforeunload guard', () => {
+  it('handler calls preventDefault when isDirty is true', () => {
+    markDirty()
+    render(App)
+    const event = new Event('beforeunload', { cancelable: true })
+    event.preventDefault = vi.fn()
+    window.dispatchEvent(event)
+    expect(event.preventDefault).toHaveBeenCalled()
+  })
+
+  it('handler does not call preventDefault when isDirty is false', () => {
+    markClean()
+    render(App)
+    const event = new Event('beforeunload', { cancelable: true })
+    event.preventDefault = vi.fn()
+    window.dispatchEvent(event)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('handler is removed when App component is destroyed', () => {
+    markDirty()
+    const { unmount } = render(App)
+    unmount()
+    const event = new Event('beforeunload', { cancelable: true })
+    event.preventDefault = vi.fn()
+    window.dispatchEvent(event)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+  })
+})
+
 describe('Sidebar.svelte', () => {
   it('clicking Firearms nav sets currentView to "firearms"', async () => {
     appState.dbInstance = { fake: true }
