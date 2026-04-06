@@ -5,6 +5,8 @@
   import Sidebar from './components/Sidebar.svelte'
   import Toast from './components/Toast.svelte'
   import ConfirmModal from './components/ConfirmModal.svelte'
+  import FirearmList from './components/firearms/FirearmList.svelte'
+  import FirearmDetail from './components/firearms/FirearmDetail.svelte'
 
   // Reactive document.title
   $effect(() => {
@@ -40,9 +42,10 @@
   <div class="flex min-h-screen bg-bg">
     <Sidebar />
     <main class="flex-1 p-6 md:ml-56">
-      {#if appState.currentView === 'firearms' || appState.currentView === 'firearm-detail'}
-        <!-- FirearmList / FirearmDetail loaded in Step 9 -->
-        <p class="text-text-muted">Firearms view (Step 9)</p>
+      {#if appState.currentView === 'firearms'}
+        <FirearmList />
+      {:else if appState.currentView === 'firearm-detail'}
+        <FirearmDetail />
       {:else if appState.currentView === 'documents'}
         <!-- DocumentList loaded in Step 11 -->
         <p class="text-text-muted">Documents view (Step 11)</p>
