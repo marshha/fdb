@@ -2,9 +2,11 @@
 
 A fully offline, privacy-first firearm ownership tracker. All data lives in a single SQLite file on your machine — no accounts, no cloud, no network.
 
+**[Open the browser app →](https://marshha.github.io/fdb/)**
+
 Two interfaces share the same data layer:
 - **CLI** (`fdb`) — scriptable, pipeable, works over SSH
-- **Browser app** — visual UI served locally or via GitLab Pages *(Phase 2)*
+- **Browser app** — visual UI, runs entirely in your browser
 
 ---
 
@@ -138,9 +140,9 @@ npx serve public    # serve the built app
 
 Then open `http://localhost:3000`.
 
-### Deploy to GitLab Pages
+### Hosted on GitHub Pages
 
-Push to `main`. The CI pipeline builds and deploys automatically. Set the `VITE_BASE_PATH` CI/CD variable in project settings if your Pages URL is a subpath (e.g. `https://user.gitlab.io/fdb/` → set `VITE_BASE_PATH=/fdb/`).
+The app is deployed at **https://marshha.github.io/fdb/** and updates automatically on every push to `main`.
 
 ## Development
 
