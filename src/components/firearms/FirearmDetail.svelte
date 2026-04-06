@@ -9,7 +9,6 @@
   let firearm = $state(null)
   let activeTab = $state('rounds')
   let showEditForm = $state(false)
-  let chartRefresh = $state(0)
 
   $effect(() => {
     const id = appState.selectedFirearmId
@@ -33,9 +32,7 @@
     firearm = getFirearm(appState.dbInstance, appState.selectedFirearmId)
   }
 
-  function handleRoundsChanged() {
-    chartRefresh += 1
-  }
+
 </script>
 
 {#if showEditForm && firearm}
@@ -95,7 +92,7 @@
 
     <!-- Tab content -->
     {#if activeTab === 'rounds'}
-      <RoundCountList firearmId={firearm.id} onChanged={handleRoundsChanged} refreshTrigger={chartRefresh} />
+      <RoundCountList firearmId={firearm.id} />
     {:else if activeTab === 'events'}
       <EventList firearmId={firearm.id} />
     {:else if activeTab === 'documents'}
