@@ -7,6 +7,7 @@
   import ConfirmModal from './components/ConfirmModal.svelte'
   import FirearmList from './components/firearms/FirearmList.svelte'
   import FirearmDetail from './components/firearms/FirearmDetail.svelte'
+  import DocumentList from './components/documents/DocumentList.svelte'
 
   // Reactive document.title
   $effect(() => {
@@ -47,8 +48,7 @@
       {:else if appState.currentView === 'firearm-detail'}
         <FirearmDetail />
       {:else if appState.currentView === 'documents'}
-        <!-- DocumentList loaded in Step 11 -->
-        <p class="text-text-muted">Documents view (Step 11)</p>
+        <DocumentList />
       {/if}
     </main>
   </div>
