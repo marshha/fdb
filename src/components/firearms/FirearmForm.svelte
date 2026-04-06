@@ -21,6 +21,11 @@
   let nameError = $state('')
   let serialError = $state('')
 
+  function parseDateLocal(str) {
+    const [y, m, d] = str.split('-').map(Number)
+    return new Date(y, m - 1, d).getTime()
+  }
+
   function handleSubmit() {
     nameError = ''
     serialError = ''
@@ -42,7 +47,7 @@
       manufacturer: manufacturer.trim() || null,
       caliber: caliber.trim() || null,
       purchase_price: purchase_price !== '' ? parseFloat(purchase_price) : null,
-      purchase_date: purchase_date ? new Date(purchase_date).getTime() : null,
+      purchase_date: purchase_date ? parseDateLocal(purchase_date) : null,
       ffl_dealer: ffl_dealer.trim() || null,
       notes: notes.trim() || null,
     }
