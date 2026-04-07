@@ -7,6 +7,7 @@
   import { strings } from '../lib/strings.js'
 
   let resumeHandle = $state(null)
+  let installPrompt = $state(null)
 
   onMount(async () => {
     if (!window.showOpenFilePicker) return
@@ -15,6 +16,11 @@
     } catch {
       // IDB unavailable — silently skip
     }
+  })
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault()
+    installPrompt = e
   })
 
   async function handleResume() {
@@ -37,6 +43,13 @@
       await clearHandle()
       showError({ title: 'Error', message: strings.errors.resumeFailed })
     }
+  }
+
+  async function handleInstall() {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    await installPrompt.userChoice
+    installPrompt = null
   }
 
   async function handleOpen() {
@@ -120,4 +133,14 @@
       New database
     </button>
   </div>
+
+  {#if installPrompt}
+    <button
+      type="button"
+      onclick={handleInstall}
+      class="mt-4 text-sm text-text-muted underline hover:text-text-primary"
+    >
+      Install as app
+    </button>
+  {/if}
 </div>
