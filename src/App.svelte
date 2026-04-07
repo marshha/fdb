@@ -5,6 +5,7 @@
   import Sidebar from './components/Sidebar.svelte'
   import Toast from './components/Toast.svelte'
   import ConfirmModal from './components/ConfirmModal.svelte'
+  import UpdateBanner from './components/UpdateBanner.svelte'
   import FirearmList from './components/firearms/FirearmList.svelte'
   import FirearmDetail from './components/firearms/FirearmDetail.svelte'
   import DocumentList from './components/documents/DocumentList.svelte'
@@ -36,6 +37,7 @@
 
 <Toast />
 <ConfirmModal />
+<UpdateBanner />
 
 {#if appState.dbInstance === null}
   <Landing />
