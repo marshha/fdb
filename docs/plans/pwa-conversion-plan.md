@@ -141,7 +141,7 @@ The plugin injects the SW registration script automatically into `index.html` du
 
 **WASM note:** `sqlite-wasm` is already excluded from Vite's dep-optimizer (`optimizeDeps.exclude`). The WASM binary will be included in the precache manifest by the glob pattern above and served correctly from cache on subsequent loads.
 
-**COEP/COOP headers:** Required by `sqlite-wasm` are already present in `vite.config.js`. They must also be set by the static host (GitHub Pages, Netlify, etc.) for production. The existing CI deployment workflow should be updated to set these headers (see Step 5).
+**COEP/COOP headers:** These headers are already present in `vite.config.js` for the dev server. They are required by `sqlite-wasm` only when using its OPFS (Origin Private File System) or worker-threaded modes, which need `SharedArrayBuffer`. FDB uses `oo1.DB(':memory:')` — the single-threaded in-memory API — so the headers are **not strictly required** at the application level. They were added proactively based on sqlite.org's broad recommendation. The service worker itself does not require them. For production deployments the headers can be omitted unless the storage model changes to OPFS.
 
 ---
 
@@ -161,23 +161,37 @@ Implementation:
 - When `needRefresh` is true, show the banner above using a new `UpdateBanner.svelte` component.
 - On "Reload", call `updateServiceWorker()` which skips waiting and reloads the page.
 
-This is the only UX change visible to users.
+### Step 4b — Install Prompt on Landing Page
+
+Browsers fire a `beforeinstallprompt` event when the PWA criteria are met and the app is not yet installed. The Landing page (the only screen shown before a database is open) is the right place to surface this.
+
+Add an "Install as app" link at the bottom of the Landing page:
+
+```
+┌───────────────────────────────────────┐
+│  Open database                        │  ← primary action
+│  New database                         │  ← secondary action
+│                                       │
+│  Install as app  ↓                    │  ← shown only when installable
+└───────────────────────────────────────┘
+```
+
+Implementation in `Landing.svelte`:
+
+- Capture `beforeinstallprompt` event and store the deferred prompt.
+- Show the install button only when the deferred prompt is available (i.e., not already installed, browser supports install).
+- On click, call `deferredPrompt.prompt()` and clear the stored prompt regardless of outcome.
+- The button is hidden after the user accepts or dismisses the prompt.
+
+The update banner (`UpdateBanner.svelte`) is the only other UX change visible to users.
 
 ---
 
-### Step 5 — Deployment Header Updates
+### Step 5 — Deployment
 
-`sqlite-wasm` requires `Cross-Origin-Embedder-Policy: require-corp` and `Cross-Origin-Opener-Policy: same-origin` on every response (not just the dev server). Update the GitHub Pages deployment workflow (`.github/workflows/`) and any other static host config:
+No special response headers are required for production (COEP/COOP are not needed for the in-memory sqlite-wasm mode). Any static host that serves the build output with correct MIME types will work: GitHub Pages, Netlify, Cloudflare Pages, etc.
 
-**GitHub Pages** — add a `_headers` file or use a `headers` configuration in the deployment action. GitHub Pages does not natively support custom headers; a common workaround is a `netlify.toml`-style redirect or serving via Cloudflare Pages instead. Document the limitation and recommended hosts in `README.md`.
-
-**Netlify / Cloudflare Pages** — add `static/_headers`:
-
-```
-/*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
-```
+The existing GitHub Pages CI workflow requires no changes for PWA purposes. The service worker and manifest will be part of the built output in `public/` and will be deployed automatically.
 
 ---
 
@@ -210,7 +224,7 @@ Add a Vitest/Playwright test that verifies the service worker registers successf
 | `package.json` | Add `vite-plugin-pwa` dev dependency |
 | `src/components/UpdateBanner.svelte` | Create |
 | `src/App.svelte` | Import + render `UpdateBanner` |
-| `static/_headers` | Create (Netlify/CF Pages COEP/COOP) |
+| `src/components/Landing.svelte` | Add install prompt button |
 | `README.md` | Document install UX + hosting header requirements |
 
 ---
@@ -219,7 +233,6 @@ Add a Vitest/Playwright test that verifies the service worker registers successf
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| GitHub Pages blocks COEP/COOP headers, breaking WASM in PWA mode | High | Document; recommend Cloudflare Pages or Netlify |
 | `vite-plugin-pwa` glob includes large WASM binary, slowing install | Medium | WASM is ~3 MB; acceptable for a one-time precache; exclude if needed via `globIgnores` |
 | SW update loop if `autoUpdate` fires mid-session with unsaved changes | Low | `beforeunload` guard already present; SW update defers until next navigation |
 | Maskable icon crops poorly on Android | Low | Follow safe-zone spec (glyph within inner 80% circle) |

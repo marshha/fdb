@@ -4,6 +4,20 @@
   import { openDatabase, createDatabase } from '../lib/db.js'
   import { strings } from '../lib/strings.js'
 
+  let installPrompt = $state(null)
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault()
+    installPrompt = e
+  })
+
+  async function handleInstall() {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    await installPrompt.userChoice
+    installPrompt = null
+  }
+
   async function handleOpen() {
     try {
       const { bytes, handle } = await openFile()
@@ -67,4 +81,14 @@
       New database
     </button>
   </div>
+
+  {#if installPrompt}
+    <button
+      type="button"
+      onclick={handleInstall}
+      class="mt-4 text-sm text-text-muted underline hover:text-text-primary"
+    >
+      Install as app
+    </button>
+  {/if}
 </div>
