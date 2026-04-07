@@ -1,14 +1,26 @@
 <script>
+  import { onMount } from 'svelte'
   import { appState, markDirty, showError } from '../lib/stores.svelte.js'
   import { openFile } from '../lib/fileAccess.js'
   import { openDatabase, createDatabase } from '../lib/db.js'
+  import { loadHandle, clearHandle } from '../lib/idb.js'
   import { strings } from '../lib/strings.js'
 
   let installPrompt = $state(null)
+  let resumeHandle = $state(null)
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     installPrompt = e
+  })
+
+  onMount(async () => {
+    if (!window.showOpenFilePicker) return
+    try {
+      resumeHandle = await loadHandle()
+    } catch {
+      // IDB unavailable — silently skip
+    }
   })
 
   async function handleInstall() {
@@ -16,6 +28,28 @@
     installPrompt.prompt()
     await installPrompt.userChoice
     installPrompt = null
+  }
+
+  async function handleResume() {
+    try {
+      const permission = await resumeHandle.requestPermission({ mode: 'readwrite' })
+      if (permission !== 'granted') {
+        resumeHandle = null
+        await clearHandle()
+        return
+      }
+      const file = await resumeHandle.getFile()
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const db = await openDatabase(bytes)
+      appState.dbInstance = db
+      appState.fileHandle = resumeHandle
+      appState.openFilename = resumeHandle.name
+      appState.currentView = 'firearms'
+    } catch {
+      resumeHandle = null
+      await clearHandle()
+      showError({ title: 'Error', message: strings.errors.resumeFailed })
+    }
   }
 
   async function handleOpen() {
@@ -63,6 +97,24 @@
     <p class="max-w-sm rounded bg-warning/20 px-4 py-3 text-center text-sm text-warning">
       {strings.firefox.saveWarning}
     </p>
+  {/if}
+
+  {#if resumeHandle}
+    <div class="w-full max-w-xs rounded border-l-2 border-accent bg-surface px-4 py-3">
+      <p class="mb-0.5 text-xs font-medium uppercase tracking-wide text-text-muted">Resume</p>
+      <div class="flex items-center justify-between gap-3">
+        <span class="truncate text-sm text-text-primary">{resumeHandle.name}</span>
+        <button
+          type="button"
+          onclick={handleResume}
+          class="shrink-0 rounded bg-accent px-3 py-1.5 text-xs font-medium text-text-inverse hover:bg-accent-hover"
+        >
+          Resume
+        </button>
+      </div>
+    </div>
+
+    <p class="text-xs text-text-muted">{strings.landing.resumeOr}</p>
   {/if}
 
   <div class="flex flex-col gap-3 w-full max-w-xs">

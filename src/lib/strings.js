@@ -13,6 +13,7 @@ export const strings = {
     roundsMin:          'Rounds fired must be at least 1.',
     fileRequired:       'Please select a file.',
     fatalOpen:          'Could not open database. The file may be corrupt or not a valid SQLite database.',
+    resumeFailed:       'Could not reopen the previous file. It may have been moved or deleted.',
     missingDb:          'No database specified. Use --db <path> or set "db" in ~/.fdbrc.',
     configMalformed:    'Warning: ~/.fdbrc could not be parsed as JSON. Ignoring config defaults.',
   },
@@ -50,6 +51,8 @@ export const strings = {
     description: 'A personal firearms database that runs entirely in your browser. Your data lives in a file on your machine — nothing is sent to any server, ever.',
     verifyLinkText: 'Verify it yourself.',
     verifyLinkUrl:  'https://github.com/marshha/fdb',
+    resumeLabel:    'Resume',
+    resumeOr:       'or',
   },
   firefox: {
     saveWarning: 'Your browser does not support in-place file saving. Each save will download a new copy of your database.',
