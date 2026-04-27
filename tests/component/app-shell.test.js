@@ -1,4 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+vi.mock('../../src/lib/idb.js', () => ({
+  loadHandle: vi.fn().mockResolvedValue(null),
+  saveHandle: vi.fn().mockResolvedValue(undefined),
+  clearHandle: vi.fn().mockResolvedValue(undefined),
+  loadSettings: vi.fn().mockResolvedValue({ showSerials: false, confirmBeforeSave: false }),
+  saveSettings: vi.fn().mockResolvedValue(undefined),
+}))
 import { render, screen } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import {

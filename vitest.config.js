@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { playwright } from '@vitest/browser-playwright'
+import path from 'node:path'
 
 export default defineConfig({
   test: {
@@ -23,6 +24,12 @@ export default defineConfig({
         plugins: [svelte()],
         resolve: {
           conditions: ['browser'],
+          alias: [
+            {
+              find: 'virtual:pwa-register/svelte',
+              replacement: path.resolve('./tests/component/__mocks__/pwa-register.js'),
+            },
+          ],
         },
         test: {
           globals: true,
