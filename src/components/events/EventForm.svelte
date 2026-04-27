@@ -29,10 +29,11 @@
       return
     }
 
+    const [y, m, d] = date.split('-').map(Number)
     const data = {
       firearm_id: firearmId,
       event_type: event_type.trim() || 'Note',
-      date: new Date(date).getTime(),
+      date: new Date(y, m - 1, d).getTime(),
       title: title.trim(),
       description: description.trim() || null,
     }
