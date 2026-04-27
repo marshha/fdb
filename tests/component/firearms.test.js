@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/svelte'
+import { render, screen, waitFor, fireEvent } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import {
   appState,
@@ -163,5 +163,19 @@ describe('FirearmForm', () => {
     await userEvent.type(screen.getByLabelText(/Serial Number/), 'SR-888')
     await userEvent.click(screen.getByRole('button', { name: 'Add Firearm' }))
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('stores purchase_date as local midnight, not UTC midnight', async () => {
+    const onClose = vi.fn()
+    render(FirearmForm, { props: { onClose } })
+    await userEvent.type(screen.getByLabelText(/Name/), 'Test Gun')
+    await userEvent.type(screen.getByLabelText(/Serial Number/), 'SN-DATE-01')
+    fireEvent.input(screen.getByLabelText(/Purchase Date/), { target: { value: '2024-03-15' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Add Firearm' }))
+    const firearm = getAllFirearms(db)[0]
+    const d = new Date(firearm.purchase_date)
+    expect(d.getFullYear()).toBe(2024)
+    expect(d.getMonth()).toBe(2) // 0-indexed: March = 2
+    expect(d.getDate()).toBe(15)
   })
 })

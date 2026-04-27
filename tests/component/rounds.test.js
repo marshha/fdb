@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/svelte'
+import { render, screen, waitFor, fireEvent } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { appState, closeModal, markClean } from '../../src/lib/stores.svelte.js'
 import {
@@ -133,5 +133,20 @@ describe('RoundCountForm', () => {
     await userEvent.type(input, '15')
     await userEvent.click(screen.getByRole('button', { name: 'Add Session' }))
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('stores date as local midnight, not UTC midnight', async () => {
+    const onClose = vi.fn()
+    render(RoundCountForm, { props: { firearmId, onClose } })
+    fireEvent.input(screen.getByLabelText(/Date/), { target: { value: '2024-03-15' } })
+    const input = screen.getByLabelText(/Rounds Fired/)
+    await userEvent.clear(input)
+    await userEvent.type(input, '10')
+    await userEvent.click(screen.getByRole('button', { name: 'Add Session' }))
+    const stored = getRoundCounts(db, firearmId)[0]
+    const d = new Date(stored.date)
+    expect(d.getFullYear()).toBe(2024)
+    expect(d.getMonth()).toBe(2) // 0-indexed: March = 2
+    expect(d.getDate()).toBe(15)
   })
 })
