@@ -24,6 +24,7 @@ export const strings = {
     deleteEvent:    'Delete this event? This cannot be undone.',
     deleteDocument: 'Delete this document? It will be removed from all associated firearms. This cannot be undone.',
     unlinkDocument: 'Unlink this document from this firearm? The document will remain in your library.',
+    saveOverwrite:  (filename) => `Overwrite ${filename} with your current changes?`,
   },
   toasts: {
     saved:            'Database saved.',
