@@ -3,6 +3,8 @@
  * All functions are browser-only. Never import from cli/ or Node environments.
  */
 
+import { saveHandle } from './idb.js'
+
 /**
  * Open a .db file from the user's filesystem.
  * Returns { bytes: Uint8Array, handle: FileSystemFileHandle | null }
@@ -20,6 +22,7 @@ export async function openFile() {
     })
     const file = await handle.getFile()
     const buffer = await file.arrayBuffer()
+    await saveHandle(handle)
     return { bytes: new Uint8Array(buffer), handle }
   }
 
@@ -79,6 +82,7 @@ export async function saveFile(bytes, existingHandle) {
     const writable = await handle.createWritable()
     await writable.write(bytes)
     await writable.close()
+    await saveHandle(handle)
     return handle
   }
 
@@ -105,6 +109,7 @@ export async function saveFileAs(bytes) {
     const writable = await handle.createWritable()
     await writable.write(bytes)
     await writable.close()
+    await saveHandle(handle)
     return handle
   }
 
