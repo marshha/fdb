@@ -27,6 +27,9 @@ export const appState = $state({
 
   // Privacy: whether serial numbers are visible in the UI
   showSerials: false,
+
+  // Whether to show a confirmation dialog before overwriting an existing file on Save
+  confirmBeforeSave: false,
 })
 
 export function markDirty() {
