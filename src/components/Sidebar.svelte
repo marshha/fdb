@@ -1,5 +1,5 @@
 <script>
-  import { appState } from '../lib/stores.svelte.js'
+  import { appState, showConfirm, markClean } from '../lib/stores.svelte.js'
   import { strings } from '../lib/strings.js'
   import SaveButton from './SaveButton.svelte'
 
@@ -13,6 +13,24 @@
 
   function handleOverlayClick() {
     mobileOpen = false
+  }
+
+  function closeDatabase() {
+    appState.dbInstance = null
+    appState.fileHandle = null
+    appState.openFilename = null
+    appState.selectedFirearmId = null
+    appState.currentView = 'landing'
+    mobileOpen = false
+    markClean()
+  }
+
+  function handleClose() {
+    if (appState.isDirty) {
+      showConfirm({ title: 'Close Database', message: strings.confirm.closeUnsaved, onConfirm: closeDatabase })
+    } else {
+      closeDatabase()
+    }
   }
 </script>
 
@@ -78,6 +96,16 @@
 
   <div class="mt-4 flex flex-col gap-2">
     {#if appState.dbInstance !== null}
+      <button
+        type="button"
+        onclick={handleClose}
+        class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-medium text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Close
+      </button>
       <button
         type="button"
         onclick={() => (settingsOpen = true)}
