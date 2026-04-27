@@ -1,5 +1,7 @@
 # FDB — Firearm Database
 
+[![CI](https://github.com/marshha/fdb/actions/workflows/ci.yml/badge.svg)](https://github.com/marshha/fdb/actions/workflows/ci.yml)
+
 A fully offline, privacy-first firearm ownership tracker. All data lives in a single SQLite file on your machine — no accounts, no cloud, no network.
 
 **[Open the browser app →](https://marshha.github.io/fdb/)**
