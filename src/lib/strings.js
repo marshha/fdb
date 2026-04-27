@@ -62,4 +62,8 @@ export const strings = {
     withFile:   (filename) => `FDB — ${filename}`,
     unsaved:    'FDB — unsaved',
   },
+  settings: {
+    showSerials:       'Show serial numbers',
+    confirmBeforeSave: 'Confirm before save',
+  },
 }

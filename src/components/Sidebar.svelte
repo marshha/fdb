@@ -1,5 +1,6 @@
 <script>
   import { appState } from '../lib/stores.svelte.js'
+  import { strings } from '../lib/strings.js'
   import SaveButton from './SaveButton.svelte'
 
   let mobileOpen = $state(false)
@@ -73,6 +74,20 @@
       </button>
     </li>
   </ul>
+
+  {#if appState.dbInstance !== null}
+    <div class="mt-4 border-t border-surface-raised pt-4">
+      <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Settings</div>
+      <label class="flex cursor-pointer items-center justify-between gap-2 py-1 text-sm text-text-primary">
+        <span>{strings.settings.showSerials}</span>
+        <input type="checkbox" bind:checked={appState.showSerials} class="h-4 w-4" />
+      </label>
+      <label class="flex cursor-pointer items-center justify-between gap-2 py-1 text-sm text-text-primary">
+        <span>{strings.settings.confirmBeforeSave}</span>
+        <input type="checkbox" bind:checked={appState.confirmBeforeSave} class="h-4 w-4" />
+      </label>
+    </div>
+  {/if}
 
   <div class="mt-4">
     <SaveButton />
