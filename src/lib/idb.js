@@ -7,6 +7,12 @@ const DB_NAME = 'fdb-meta'
 const DB_VERSION = 1
 const STORE = 'handles'
 const KEY = 'lastHandle'
+const SETTINGS_KEY = 'settings'
+
+const SETTINGS_DEFAULTS = {
+  showSerials: false,
+  confirmBeforeSave: false,
+}
 
 function openMetaDb() {
   return new Promise((resolve, reject) => {
@@ -42,6 +48,26 @@ export async function clearHandle() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite')
     tx.objectStore(STORE).delete(KEY)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
+export async function loadSettings() {
+  const db = await openMetaDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly')
+    const req = tx.objectStore(STORE).get(SETTINGS_KEY)
+    req.onsuccess = () => resolve({ ...SETTINGS_DEFAULTS, ...(req.result ?? {}) })
+    req.onerror = () => reject(req.error)
+  })
+}
+
+export async function saveSettings(settings) {
+  const db = await openMetaDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite')
+    tx.objectStore(STORE).put(settings, SETTINGS_KEY)
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
   })

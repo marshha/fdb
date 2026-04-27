@@ -1,6 +1,8 @@
 <script>
+  import { onMount } from 'svelte'
   import { appState } from './lib/stores.svelte.js'
   import { strings } from './lib/strings.js'
+  import { loadSettings, saveSettings } from './lib/idb.js'
   import Landing from './components/Landing.svelte'
   import Sidebar from './components/Sidebar.svelte'
   import Toast from './components/Toast.svelte'
@@ -9,6 +11,19 @@
   import FirearmList from './components/firearms/FirearmList.svelte'
   import FirearmDetail from './components/firearms/FirearmDetail.svelte'
   import DocumentList from './components/documents/DocumentList.svelte'
+
+  onMount(async () => {
+    const s = await loadSettings()
+    appState.showSerials = s.showSerials
+    appState.confirmBeforeSave = s.confirmBeforeSave
+  })
+
+  $effect(() => {
+    saveSettings({
+      showSerials: appState.showSerials,
+      confirmBeforeSave: appState.confirmBeforeSave,
+    })
+  })
 
   // Reactive document.title
   $effect(() => {

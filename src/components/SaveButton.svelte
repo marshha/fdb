@@ -1,10 +1,10 @@
 <script>
-  import { appState, markClean, showToast } from '../lib/stores.svelte.js'
+  import { appState, markClean, showToast, showConfirm } from '../lib/stores.svelte.js'
   import { saveFile, saveFileAs } from '../lib/fileAccess.js'
   import { exportDatabase } from '../lib/db.js'
   import { strings } from '../lib/strings.js'
 
-  async function handleSave() {
+  async function doSave() {
     const bytes = exportDatabase(appState.dbInstance)
     const newHandle = await saveFile(bytes, appState.fileHandle)
     if (newHandle && !appState.fileHandle) {
@@ -13,6 +13,18 @@
     }
     markClean()
     showToast(strings.toasts.saved)
+  }
+
+  function handleSave() {
+    if (appState.confirmBeforeSave && appState.fileHandle) {
+      showConfirm({
+        title: 'Save',
+        message: strings.confirm.saveOverwrite(appState.openFilename),
+        onConfirm: () => doSave(),
+      })
+    } else {
+      doSave()
+    }
   }
 
   async function handleSaveAs() {
