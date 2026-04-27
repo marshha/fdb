@@ -37,6 +37,9 @@
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.2"
   },
+  "overrides": {
+    "serialize-javascript": "^7.0.5"
+  },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.51.2-build8",
     "chart.js": "^4.5.1",
