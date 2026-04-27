@@ -93,35 +93,36 @@
     <SaveButton />
   </div>
 
-  {#if settingsOpen}
-    <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
-    >
-      <div class="w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
-        <h2 id="settings-title" class="mb-4 text-lg font-semibold text-text-primary">Settings</h2>
-        <div class="flex flex-col gap-3">
-          <label class="flex cursor-pointer items-center justify-between gap-4 text-sm text-text-primary">
-            <span>{strings.settings.showSerials}</span>
-            <input type="checkbox" bind:checked={appState.showSerials} class="h-4 w-4" />
-          </label>
-          <label class="flex cursor-pointer items-center justify-between gap-4 text-sm text-text-primary">
-            <span>{strings.settings.confirmBeforeSave}</span>
-            <input type="checkbox" bind:checked={appState.confirmBeforeSave} class="h-4 w-4" />
-          </label>
-        </div>
-        <div class="mt-6 flex justify-end">
-          <button
-            type="button"
-            onclick={() => (settingsOpen = false)}
-            class="rounded bg-accent px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent-hover"
-          >
-            Done
-          </button>
-        </div>
+</nav>
+
+{#if settingsOpen}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="settings-title"
+  >
+    <div class="w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
+      <h2 id="settings-title" class="mb-4 text-lg font-semibold text-text-primary">Settings</h2>
+      <div class="flex flex-col gap-3">
+        <label class="flex cursor-pointer items-center justify-between gap-4 text-sm text-text-primary">
+          <span>{strings.settings.showSerials}</span>
+          <input type="checkbox" bind:checked={appState.showSerials} class="h-4 w-4" />
+        </label>
+        <label class="flex cursor-pointer items-center justify-between gap-4 text-sm text-text-primary">
+          <span>{strings.settings.confirmBeforeSave}</span>
+          <input type="checkbox" bind:checked={appState.confirmBeforeSave} class="h-4 w-4" />
+        </label>
+      </div>
+      <div class="mt-6 flex justify-end">
+        <button
+          type="button"
+          onclick={() => (settingsOpen = false)}
+          class="rounded bg-accent px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent-hover"
+        >
+          Done
+        </button>
       </div>
     </div>
-  {/if}
-</nav>
+  </div>
+{/if}
