@@ -9,7 +9,21 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      manifest: false, // supplied as static/manifest.webmanifest
+      manifest: {
+        name: 'FDB — Firearm Database',
+        short_name: 'FDB',
+        description: 'Private, offline firearm ownership tracker',
+        start_url: process.env.VITE_BASE_PATH ?? '/',
+        scope: process.env.VITE_BASE_PATH ?? '/',
+        display: 'standalone',
+        background_color: '#1c1917',
+        theme_color: '#1c1917',
+        icons: [
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
       workbox: {
         globPatterns: ['**/*.{js,css,html,wasm}'],
         navigateFallback: 'index.html',
